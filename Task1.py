@@ -1,50 +1,66 @@
 #!/usr/bin/env python
 
-import argparse
-import logging
+import re
 import sys
-from Bio.SeqUtils import nt_search
+import logging
+import argparse
 from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqUtils import nt_search
+from Bio.Alphabet import generic_dna
 
 choices = ['embl', 'fasta', 'fastq-sanger', 'fastq', 'fastq-solexa', 'fastq-illumina', 'genbank', 'gb']
 
-def generate_fastas(fasta_sequences):
+def find_pattern(seqs, pattern, outfile_path):
     """
-    Generator for extracting fasta sequences from a Bio.seqIO readable file.
-    Returns the sequence and its ID.
-    """
-    for f_seq in fasta_sequences:
-        sequence, id = str(f_seq.seq), f_seq.id
-        yield sequence, id
-
-
-def find_pattern(query, pattern):
-    """
-    Finds all occurrences of a pattern in the query sequence.
+    Finds all occurrences of a pattern in the a given sequence.
     Outputs sequence ID, start and end postion of the pattern.
     """
-    for (q,id) in query:
-        find_match(q,pattern,id)
-        find_match(q[::-1],pattern, id + 'R' )
+    rev_compl = Seq(pattern, generic_dna).complement()
+    search_func = simple_pattern_search
+    if set(pattern).difference(set('ATCG')):
+        search_func = complex_pattern_search
 
 
-def find_match(query,pattern,id):
+    with open(outfile_path, 'w+') as outfile:
+        for seq in seqs:
+            search_func(seq, pattern, outfile)
+            search_func(seq, rev_compl, outfile, '-')
+
+
+def simple_pattern_search(sequence, pattern, outfile, strand='+'):
+    """
+    Simple regular expression search. This is way faster than the complex search.
+    """
+    bed_template = '%s\t%s\t%s\t%s\t%s\t%s\n'
+    for match in re.finditer( str(pattern), str(sequence.seq) ):
+        outfile.write(bed_template % (sequence.id,  match.start(), match.end(), '', '', strand))
+
+
+def complex_pattern_search(sequence, pattern, outfile, strand='+'):
+    """
+    Searching for pattern with biopyhon's nt_search().
+    This allows for ambiguous values, like N = A or T or C or G, R = A or G ...
+    """
     l = len(pattern)
-    for match in nt_search(query, pattern):
-        if type(match) == int:
-            sys.stdout.write('{:30s} {:5d}  {:5d}'.format('>'+id,match,match+l)+'\n')
-    return
+    matches = nt_search(str(sequence.seq), pattern)
+    bed_template = '%s\t%s\t%s\t%s\t%s\t%s\n'
+    for match in matches[1:]:
+        outfile.write(bed_template % (sequence.id, match, match+l, '', '', strand) )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-q', '--query' , required=True)
+    parser.add_argument('-i', '--input' , required=True)
+    parser.add_argument('-o', '--output' , required=True)
     parser.add_argument('-p', '--pattern' , required=True)
-    parser.add_argument('-f', '--format', choices= choices)
+    parser.add_argument('-f', '--format', default="fasta", choices=choices)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
-    logger.info('Searching  %s for %s. Forward and reverse strand search...' % (args.query, args.pattern))
+    logger.info('Searching  %s for %s. Forward and reverse strand search...' % (args.input, args.pattern))
 
-    find_pattern( generate_fastas(SeqIO.parse(open(args.query), args.format)), args.pattern )
+    with open(args.input) as handle:
+        find_pattern( SeqIO.parse(handle, args.format), args.pattern, args.output )
+
