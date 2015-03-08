@@ -6,9 +6,7 @@ import sys
 from Bio.SeqUtils import nt_search
 from Bio import SeqIO
 
-choices = ['abi', 'ace', 'clustal', 'embl', 'fasta', 'fastq-sanger', 'fastq', 'fastq-solexa', 'fastq-illumina', 'genbank', 'gb', 'ig' \
-    'imgt', 'nexus', 'phd', 'phylip', 'pir', 'seqxml', 'sff', 'stockholm', 'swiss', 'tab', 'qual', 'uniprot-xml']
-
+choices = ['embl', 'fasta', 'fastq-sanger', 'fastq', 'fastq-solexa', 'fastq-illumina', 'genbank', 'gb']
 
 def generate_fastas(fasta_sequences):
     """
@@ -39,18 +37,14 @@ def find_match(query,pattern,id):
 
 
 if __name__ == "__main__":
-    
     parser = argparse.ArgumentParser()
     parser.add_argument('-q', '--query' , required=True)
     parser.add_argument('-p', '--pattern' , required=True)
     parser.add_argument('-f', '--format', choices= choices)
     args = parser.parse_args()
-    query = args.query
-    pattern = args.pattern
-    format = args.format
-    
+
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
-    logger.info('Searching  %s for %s. Forward and reverse strand search...'  %(query,pattern))
-    
-    find_pattern(generate_fastas(SeqIO.parse(open(query),format)),pattern)
+    logger.info('Searching  %s for %s. Forward and reverse strand search...' % (args.query, args.pattern))
+
+    find_pattern( generate_fastas(SeqIO.parse(open(args.query), args.format)), args.pattern )
